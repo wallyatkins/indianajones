@@ -5,6 +5,7 @@
 <title>Indiana Jones Animated Map</title>
   
   <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no' />
+  <!-- Using the LatLon from http://www.movable-type.co.uk/scripts/latlong.html  -->
   <script src='LatLon.js'></script>
   <script src='http://api.tiles.mapbox.com/mapbox.js/v1.5.0/mapbox.js'></script>
   <link href='http://api.tiles.mapbox.com/mapbox.js/v1.5.0/mapbox.css' rel='stylesheet' />
@@ -17,6 +18,7 @@
 <body>
 <div id='map'></div>
 <script>
+
 // create the map and initialize the view
 var map = L.mapbox.map('map', 'jonahadkins.map-xyxnaoxk').setView([0, 0], 3);
 
@@ -24,13 +26,20 @@ var map = L.mapbox.map('map', 'jonahadkins.map-xyxnaoxk').setView([0, 0], 3);
 var animline = L.polyline([], {"color":"red"}).addTo(map);
 
 // boolean if route animation is complete
+// toggle to true when no more waypoints in the route array
 var routeCompleted = false;
+
+// starting at the first waypoint (array index zero)
 var lastWayPointIndex = 0;
 
 // how far (in KM) to travel each step
+// adjust for speed of animation
 var distanceInterval = 50;
 
 // array of Leaflet LatLng's to travel in the route
+// used the -360 technique (international date line)
+// on the longitudes but that might not be needed any more
+// due to the logic added in the animation code (see below)
 var route = [
 	L.latLng(37.619086, -122.374577), // San Francisco Airport (California)
 	L.latLng(19.737449, -156.045827), // Kona International Airport (Hawaii)
@@ -38,50 +47,69 @@ var route = [
 	L.latLng(27.696962, -274.641655) // Tribhuvan International Airport (Nepal - 27.696962, 85.358345)
 ];
 
-// initialize at the start point
+// create a variable that will hold the most recent LatLon
+// that has been added to the animation line (animline)
 var currentLL = route[lastWayPointIndex];
+
+// initialize at the start point by adding the current LatLon
+// (starting waypoint) to the animation line (animline)
 animline.addLatLng(currentLL);
 
-// start adding new points to the map
-add();
+// call the function to start adding points to the line
+animateRoute();
 
-function add() {
-	console.log(currentLL.toString());
+// this function will get called repeatedly by a specified delay/timeout
+// to animate a the drawing of a route by calculating the points along the
+// way to each waypoint by the specified distance interval.
+function animateRoute() {
+	// create the non-Leaflet LatLon objects - they contain bearing and distance functions
+	// it would be cool to add this functionality to Leaflet LatLon objects (look into this)
+	// we need non-Leaflet objects for current position and next waypoint
 	var currentll = new LatLon(currentLL.lat, currentLL.lng);
 	var nextWayPoint = new LatLon(route[lastWayPointIndex + 1].lat, route[lastWayPointIndex + 1].lng);
 	
-	// If close enough to next waypoint the that's the next point to add
+	// If close enough to next waypoint then that's the next point to add
 	// Then start travel to the next waypoint in the route
 	if (currentll.rhumbDistanceTo(nextWayPoint) < distanceInterval) {
+		// currentLL is the Leaflet LatLon object (global to page)
+		// currentll is the non-Leaflet LatLon object (local to this function only)
 		currentLL = route[++lastWayPointIndex];
 		currentll = new LatLon(currentLL.lat, currentLL.lng);
+		
+		// check if we have reached the last waypoint
 		if (lastWayPointIndex == route.length - 1) {
 			routeCompleted = true;
 		}
 	}
 	
 	// calculate the bearing and destination point
-	var bearing = currentll.rhumbBearingTo(nextWayPoint);
 	// make it a straight line on map by using rhumb bearing
+	var bearing = currentll.rhumbBearingTo(nextWayPoint);
+	
+	// calculate the next point to add/draw on the line
 	var newll = currentll.destinationPoint(bearing, distanceInterval);
 	
-	// watch for jump over international date line
+	// watch for the jump over international date line - fixes crazy lines
+	// this logic handles this case for this given route but won't
+	// work for everything. need to come up with a better solution
 	if (newll._lon > 0) {
 		newll._lon -= 360;
 	}
 
-    // addLatLng takes a new latLng location and puts it at the end of the
-    // line. You could pull points from your data or generate them - this
-    // example just makes a sine wave with some math.
+	// generate the new Leaflet LatLon
 	var newLL = L.latLng(newll._lat, newll._lon);
+	
+	// store the new LatLon as the current LatLon
 	currentLL = newLL;
+	
+	// add/draw the new LatLon to the animation line
     animline.addLatLng(newLL);
 	
-    // pan the map along with where the line is being added. optional, of course
+    // pan the map along with where the line is being added
     map.setView(newLL, 3);
 
-    // call add() in a 100 milliseconds
-    if (!routeCompleted) window.setTimeout(add, 100);
+    // call this function again in 100 milliseconds
+    if (!routeCompleted) window.setTimeout(animateRoute, 100);
 }
 
 </script>
