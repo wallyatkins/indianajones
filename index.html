@@ -106,7 +106,7 @@ function animateRoute() {
     animline.addLatLng(newLL);
 	
     // pan the map along with where the line is being added
-    map.setView(newLL, 3);
+    map.setView(newLL, map.getZoom());
 
     // call this function again in 100 milliseconds
     if (!routeCompleted) window.setTimeout(animateRoute, 100);
